@@ -1,0 +1,181 @@
+name: Deploy Datadog Apps
+
+on:
+  pull_request:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-datadog-apps.yml'
+  push:
+    paths:
+      - 'apps/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-datadog-apps.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-datadog-apps-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  lockfile:
+    name: Lockfile consistency
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Check workspace React alignment
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const expected = { react: root.overrides?.react, 'react-dom': root.overrides?.['react-dom'] };
+          const expectedTypes = { '@types/react': root.devDependencies?.['@types/react'], '@types/react-dom': root.devDependencies?.['@types/react-dom'] };
+          const container = root.datadogApps?.container ?? 'apps';
+          const mismatches = [];
+
+          for (const entry of fs.readdirSync(container, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const packagePath = path.join(container, entry.name, 'package.json');
+            if (!fs.existsSync(packagePath)) continue;
+            const app = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+            for (const [name, range] of Object.entries(expected)) {
+              if (!range || app.dependencies?.[name] !== range) mismatches.push(packagePath + ': ' + name);
+            }
+            for (const [name, range] of Object.entries(expectedTypes)) {
+              if (app.devDependencies?.[name] && app.devDependencies[name] !== range) mismatches.push(packagePath + ': ' + name);
+            }
+          }
+
+          if (mismatches.length) {
+            throw new Error('Workspace React dependency mismatch:\n' + mismatches.join('\n'));
+          }
+          NODE
+
+  validate:
+    name: Typecheck, lint & build
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check workspace React alignment
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const root = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const expected = { react: root.overrides?.react, 'react-dom': root.overrides?.['react-dom'] };
+          const expectedTypes = { '@types/react': root.devDependencies?.['@types/react'], '@types/react-dom': root.devDependencies?.['@types/react-dom'] };
+          const container = root.datadogApps?.container ?? 'apps';
+          const mismatches = [];
+
+          for (const entry of fs.readdirSync(container, { withFileTypes: true })) {
+            if (!entry.isDirectory()) continue;
+            const packagePath = path.join(container, entry.name, 'package.json');
+            if (!fs.existsSync(packagePath)) continue;
+            const app = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
+            for (const [name, range] of Object.entries(expected)) {
+              if (!range || app.dependencies?.[name] !== range) mismatches.push(packagePath + ': ' + name);
+            }
+            for (const [name, range] of Object.entries(expectedTypes)) {
+              if (app.devDependencies?.[name] && app.devDependencies[name] !== range) mismatches.push(packagePath + ': ' + name);
+            }
+          }
+
+          if (mismatches.length) {
+            throw new Error('Workspace React dependency mismatch:\n' + mismatches.join('\n'));
+          }
+          NODE
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+  changed:
+    name: Detect changed apps
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.detect.outputs.matrix }}
+      any: ${{ steps.detect.outputs.any }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - id: detect
+        env:
+          CONTAINER: 'apps'
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          base="$BEFORE"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            base=$(git hash-object -t tree /dev/null)
+          fi
+          matrix=$(git diff --name-only "$base" "$AFTER" -- "$CONTAINER/" \
+            | awk -F/ 'NF > 1 {print $2}' \
+            | sort -u \
+            | while IFS= read -r name; do
+                if [ -d "$CONTAINER/$name" ]; then echo "$name"; fi
+              done \
+            | jq -R . \
+            | jq -cs '{app: map(select(length > 0))}')
+          count=$(echo "$matrix" | jq '.app | length')
+          echo "matrix=$matrix" >> "$GITHUB_OUTPUT"
+          if [ "$count" -gt 0 ]; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "Changed apps: $matrix"
+
+  upload:
+    name: Upload ${{ matrix.app }}
+    needs:
+      - changed
+      - lockfile
+    if: needs.changed.outputs.any == 'true' && needs.lockfile.result == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.changed.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Check Datadog deploy secrets
+        env:
+          DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+        run: |
+          if [ -z "$DD_API_KEY" ] || [ -z "$DD_APP_KEY" ]; then
+            echo "::error::DATADOG_API_KEY / DATADOG_APP_KEY are not set on this repository, so the upload can't authenticate. Without them it falls back to an interactive OAuth login, which hangs for 5 minutes on a CI runner before failing."
+            echo "::error::Set them under Settings > Secrets and variables > Actions, or run: npm init @datadog/apps --set-secrets"
+            exit 1
+          fi
+      - name: Upload ${{ matrix.app }}
+        env:
+          APP: ${{ matrix.app }}
+          DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
+          DD_SITE: datad0g.com
+          DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
+        run: npm run upload -w "apps/$APP"
