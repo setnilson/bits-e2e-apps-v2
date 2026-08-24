@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "id": "45d669650cab1fcba8a84d6e0edd412a",
+  "name": "my-first-app"
+}
