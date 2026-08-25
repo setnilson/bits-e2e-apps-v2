@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "930c642c-eb62-4cbf-acf0-fd7496aef0f8",
+  "name": "Barak Rainbow"
+}
