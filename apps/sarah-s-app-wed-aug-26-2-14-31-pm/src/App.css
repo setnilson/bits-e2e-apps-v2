@@ -1,0 +1,45 @@
+.alexander-page {
+    align-items: center;
+    background:
+        radial-gradient(circle at 18% 24%, rgba(255, 176, 0, 0.18), transparent 24%),
+        radial-gradient(circle at 82% 70%, rgba(255, 219, 92, 0.22), transparent 22%),
+        #fff8f8;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.alexander-title {
+    color: #d11124;
+    font-size: 80px;
+    letter-spacing: 0;
+    line-height: 1;
+    margin: 0;
+    position: relative;
+    text-align: center;
+    text-transform: lowercase;
+    text-shadow: 0 4px 18px rgba(209, 17, 36, 0.18);
+}
+
+.sparkle {
+    color: #ffb000;
+    display: inline-block;
+    font-size: 0.5em;
+    line-height: 1;
+    text-shadow: 0 0 16px rgba(255, 176, 0, 0.65);
+    transform: translateY(-0.48em);
+}
+
+.sparkle-left {
+    margin-right: 0.24em;
+}
+
+.sparkle-right {
+    margin-left: 0.24em;
+}
+
+@media (max-width: 520px) {
+    .alexander-title {
+        font-size: 48px;
+    }
+}
