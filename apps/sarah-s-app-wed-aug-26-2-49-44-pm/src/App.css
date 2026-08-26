@@ -1,0 +1,27 @@
+.brat-app {
+    display: grid;
+    min-height: 100vh;
+    place-items: center;
+    overflow: hidden;
+    background: #8ace00;
+}
+
+.brat-wordmark {
+    max-width: 92vw;
+    margin: 0;
+    color: #050505;
+    font-family:
+        Arial Narrow,
+        Arial,
+        Helvetica,
+        sans-serif;
+    font-size: clamp(5.5rem, 26vw, 22rem);
+    font-stretch: condensed;
+    font-weight: 400;
+    letter-spacing: 0;
+    line-height: 0.82;
+    text-align: center;
+    text-transform: lowercase;
+    transform: scaleX(0.74);
+    transform-origin: center;
+}

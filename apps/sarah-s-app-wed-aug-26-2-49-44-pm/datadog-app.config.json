@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "b9d64ea1fcdc65b8edeb13166b4c716b",
+  "name": "Kelly Brat",
+  "description": "A brat-inspired Kelly wordmark."
+}
