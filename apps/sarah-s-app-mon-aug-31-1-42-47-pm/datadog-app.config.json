@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "42d90b89ff852dec76bf40a04be5b9e4",
+  "name": "Sarah's App Mon, Aug 31, 1:42:47 pm",
+  "description": "A simple magenta Ameesha app."
+}

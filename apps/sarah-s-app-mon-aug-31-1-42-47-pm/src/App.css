@@ -1,0 +1,28 @@
+.ameesha-app {
+    align-items: center;
+    background: #fff8fd;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+.ameesha-name {
+    color: magenta;
+    font-size: 4rem;
+    font-weight: 800;
+    line-height: 1;
+    margin: 0;
+    text-align: center;
+}
+
+@media (min-width: 640px) {
+    .ameesha-name {
+        font-size: 7rem;
+    }
+}
+
+@media (min-width: 1024px) {
+    .ameesha-name {
+        font-size: 10rem;
+    }
+}
