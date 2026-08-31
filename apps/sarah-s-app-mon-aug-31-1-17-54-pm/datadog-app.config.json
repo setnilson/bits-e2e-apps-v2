@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datadoghq.com",
+  "id": "49cc0c41-c813-47db-baf6-92c38dc664be",
+  "name": "Sarah's App Mon, Aug 31, 1:17:54 pm",
+  "description": "A simple purple Drew app."
+}
