@@ -1,0 +1,20 @@
+.emma-page {
+    align-items: center;
+    background:
+        radial-gradient(circle at 50% 42%, rgb(65 105 225 / 10%), transparent 34%),
+        #ffffff;
+    box-sizing: border-box;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+    overflow: hidden;
+}
+
+.emma-title {
+    color: #4169e1;
+    font-size: clamp(4.5rem, 18vw, 10rem);
+    letter-spacing: -0.06em;
+    line-height: 1;
+    margin: 0;
+    text-shadow: 0 12px 34px rgb(65 105 225 / 18%);
+}
