@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "description": "Submit a prompt and view an OpenAI response from Datadog.",
+  "id": "383de73631814ff0cb1019eac250921b",
+  "name": "OpenAI Prompt"
+}
