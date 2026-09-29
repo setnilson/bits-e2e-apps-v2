@@ -134,3 +134,4 @@ Bits Code supports both GitHub.com and GitLab.com. GitHub can be published with 
 - Data access (DDSQL vs. Action Catalog, Connections, datastores): `docs/agents/data.md`
 - Triggering or polling Workflow Automation from a backend function: `docs/agents/workflow-automation.md`
 - Upgrading `@datadog/vite-plugin` or `@datadog/action-catalog`: `docs/agents/upgrading.md`
+- Scaffolding a new app (known template pitfalls: React duplication, empty `DD_SITE`, CLI scripts): `docs/agents/scaffolding.md`

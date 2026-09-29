@@ -15,7 +15,11 @@
   },
   "overrides": {
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "@datadog/apps-frontend": {
+      "react": "$react",
+      "react-dom": "$react-dom"
+    }
   },
   "scripts": {
     "build": "npm run build --workspaces --if-present",
