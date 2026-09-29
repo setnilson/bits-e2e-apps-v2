@@ -4,6 +4,7 @@ import { defineConfig } from 'vite';
 
 import { version } from './package.json';
 import datadogAppConfig from './datadog-app.config.json';
+import rootManifest from '../../package.json';
 
 const hasDatadogApiKeys = Boolean(
     (process.env.DD_API_KEY || process.env.DATADOG_API_KEY) &&
@@ -20,7 +21,7 @@ export default defineConfig({
         datadogVitePlugin({
             logLevel: 'debug',
             auth: {
-                site: process.env.DD_SITE || datadogAppConfig.datadogSite,
+                site: process.env.DD_SITE || rootManifest.datadogApps?.site || datadogAppConfig.datadogSite,
                 apiKey: process.env.DD_API_KEY,
                 appKey: process.env.DD_APP_KEY,
             },
