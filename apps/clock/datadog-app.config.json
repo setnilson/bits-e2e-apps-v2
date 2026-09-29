@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "id": "3f81db48-e0cd-4958-96eb-023b27a092e3",
+  "name": "clock"
+}
