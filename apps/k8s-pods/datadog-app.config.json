@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "id": "2345a0d0d8de8dad03a56497830be681",
+  "name": "k8s-pods"
+}
