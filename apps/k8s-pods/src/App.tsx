@@ -1,10 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Button } from '@datadog/druids/form/Button';
+import { InputSearch } from '@datadog/druids/form/InputSearch';
 import { Select } from '@datadog/druids/form/Select';
+import { AttentionCircledIcon } from '@datadog/druids/icons/AttentionCircled';
+import { CheckCircledIcon } from '@datadog/druids/icons/CheckCircled';
+import { PodIcon } from '@datadog/druids/icons/Pod';
+import { RefreshIcon } from '@datadog/druids/icons/Refresh';
+import { TrashIcon } from '@datadog/druids/icons/Trash';
 import { Grid } from '@datadog/druids/layout/Grid';
 import { GridItem } from '@datadog/druids/layout/GridItem';
 import { Spacing } from '@datadog/druids/layout/Spacing';
-import { Badge } from '@datadog/druids/pills/Badge';
+import { CalloutValue } from '@datadog/druids/measures/CalloutValue';
+import { MessageBox } from '@datadog/druids/misc/MessageBox';
+import { StatusPill } from '@datadog/druids/pills/StatusPill';
 import { Table } from '@datadog/druids/table/Table';
 import type { TableColumn } from '@datadog/druids/table/Table';
 import { Text } from '@datadog/druids/typography/Text';
@@ -19,6 +27,19 @@ type Pod = {
 	startedAt: string;
 };
 
+type StatusLevel = 'default' | 'success' | 'warning' | 'danger';
+
+// statusLevels maps a lowercased pod phase to the severity it renders with.
+const statusLevels: Record<string, StatusLevel> = {
+	running: 'success',
+	succeeded: 'success',
+	completed: 'success',
+	pending: 'warning',
+	crashloopbackoff: 'danger',
+	error: 'danger',
+	failed: 'danger',
+};
+
 // healthyStatuses are pod phases that do not require any action.
 const healthyStatuses = new Set(['running', 'succeeded', 'completed']);
 
@@ -30,7 +51,8 @@ function minutesAgo(minutes: number): string {
 	return new Date(Date.now() - minutes * 60_000).toISOString();
 }
 
-// mockPods is demo data standing in for a live Kubernetes integration listing.
+// mockPods is a static fixture; this app is not wired to a live Kubernetes
+// integration.
 const mockPods: Pod[] = [
 	{ name: 'api-gateway-7d9f4c6b5-k2l8p', namespace: 'default', status: 'Running', restarts: 0, startedAt: minutesAgo(60 * 92) },
 	{ name: 'checkout-service-5c8d7f9a1-m4n7q', namespace: 'commerce', status: 'Running', restarts: 1, startedAt: minutesAgo(60 * 41) },
@@ -70,19 +92,19 @@ function formatAge(startedAt: string): string {
 	return `${Math.floor(hours / 24)}d`;
 }
 
-function statusBadgeLevel(pod: Pod): 'default' | 'warning' | 'danger' {
-	if (!healthyStatuses.has(pod.status.toLowerCase())) {
-		return 'danger';
-	}
-	if (pod.restarts >= unhealthyRestartsThreshold) {
+// statusLevel is the phase severity, escalated by an excessive restart count.
+function statusLevel(pod: Pod): StatusLevel {
+	const level = statusLevels[pod.status.toLowerCase()] ?? 'default';
+	if (level !== 'danger' && pod.restarts >= unhealthyRestartsThreshold) {
 		return 'warning';
 	}
-	return 'default';
+	return level;
 }
 
 function App() {
 	const [pods, setPods] = useState<Pod[]>(mockPods);
 	const [selectedNamespace, setSelectedNamespace] = useState('');
+	const [search, setSearch] = useState('');
 	const [actionMessage, setActionMessage] = useState('');
 
 	const namespaces = useMemo(() => {
@@ -93,9 +115,25 @@ function App() {
 		return Array.from(set).sort();
 	}, [pods]);
 
-	const visiblePods = useMemo(
-		() => (selectedNamespace === '' ? pods : pods.filter((pod) => pod.namespace === selectedNamespace)),
-		[pods, selectedNamespace],
+	// Unhealthy pods sort to the top so the rows that need action are first.
+	const visiblePods = useMemo(() => {
+		const query = search.trim().toLowerCase();
+		return pods
+			.filter(
+				(pod) =>
+					(selectedNamespace === '' || pod.namespace === selectedNamespace) &&
+					(query === '' || pod.name.toLowerCase().includes(query)),
+			)
+			.sort((a, b) => Number(isUnhealthy(b)) - Number(isUnhealthy(a)) || a.name.localeCompare(b.name));
+	}, [pods, search, selectedNamespace]);
+
+	const summary = useMemo(
+		() => ({
+			running: visiblePods.filter((pod) => healthyStatuses.has(pod.status.toLowerCase())).length,
+			unhealthy: visiblePods.filter(isUnhealthy).length,
+			restarts: visiblePods.reduce((total, pod) => total + pod.restarts, 0),
+		}),
+		[visiblePods],
 	);
 
 	const namespaceOptions = useMemo(
@@ -106,85 +144,172 @@ function App() {
 		[namespaces],
 	);
 
-	const deletePod = (pod: Pod) => {
-		setPods((current) => current.filter((candidate) => candidate.name !== pod.name || candidate.namespace !== pod.namespace));
+	const deletePod = useCallback((pod: Pod) => {
+		setPods((current) =>
+			current.filter((candidate) => candidate.name !== pod.name || candidate.namespace !== pod.namespace),
+		);
 		setActionMessage(`Deleted pod ${pod.namespace}/${pod.name}.`);
-	};
+	}, []);
 
 	const columns: Array<TableColumn<Pod>> = useMemo(
 		() => [
-			{ Header: 'Name', accessor: 'name' },
-			{ Header: 'Namespace', accessor: 'namespace' },
+			{
+				Header: 'Name',
+				accessor: 'name',
+				Cell: ({ row }: { row: { original: Pod } }) => (
+					<Text size="md" isMonospace hasEllipsis title={row.original.name}>
+						{row.original.name}
+					</Text>
+				),
+			},
+			{
+				Header: 'Namespace',
+				accessor: 'namespace',
+				shouldShrink: true,
+				Cell: ({ row }: { row: { original: Pod } }) => (
+					<Text size="md" variant="secondary">
+						{row.original.namespace}
+					</Text>
+				),
+			},
 			{
 				Header: 'Status',
 				accessor: 'status',
 				Cell: ({ row }: { row: { original: Pod } }) => (
-					<Badge label={row.original.status === '' ? 'unknown' : row.original.status} level={statusBadgeLevel(row.original)} />
+					<StatusPill level={statusLevel(row.original)} isSoft>
+						{row.original.status === '' ? 'Unknown' : row.original.status}
+					</StatusPill>
 				),
 			},
-			{ Header: 'Restarts', accessor: 'restarts' },
+			{
+				Header: 'Restarts',
+				accessor: 'restarts',
+				textAlign: 'right',
+				shouldShrink: true,
+				Cell: ({ row }: { row: { original: Pod } }) => {
+					const isExcessive = row.original.restarts >= unhealthyRestartsThreshold;
+					return (
+						<Text size="md" variant={isExcessive ? 'warning' : 'default'} weight={isExcessive ? 'bold' : 'normal'}>
+							{row.original.restarts}
+						</Text>
+					);
+				},
+			},
 			{
 				Header: 'Age',
 				accessor: 'startedAt',
-				Cell: ({ row }: { row: { original: Pod } }) => <span>{formatAge(row.original.startedAt)}</span>,
+				textAlign: 'right',
+				shouldShrink: true,
+				Cell: ({ row }: { row: { original: Pod } }) => (
+					<Text size="md" variant="secondary">
+						{formatAge(row.original.startedAt)}
+					</Text>
+				),
 			},
 			{
-				Header: 'Actions',
+				Header: '',
 				accessor: 'name',
 				id: 'actions',
 				disableSortBy: true,
+				textAlign: 'right',
+				shouldShrink: true,
 				Cell: ({ row }: { row: { original: Pod } }) => {
 					const pod = row.original;
 					if (!isUnhealthy(pod)) {
 						return null;
 					}
-					return <Button label="Delete" isPrimary onClick={() => deletePod(pod)} />;
+					return (
+						<Button
+							icon={TrashIcon}
+							ariaLabel={`Delete pod ${pod.namespace}/${pod.name}`}
+							title="Delete pod"
+							level="danger"
+							size="sm"
+							isBorderless
+							onClick={() => deletePod(pod)}
+						/>
+					);
 				},
 			},
 		],
-		[],
+		[deletePod],
 	);
 
 	return (
 		<Spacing as="main" padding="lg">
 			<Grid columns={1} gap="lg" isFullWidth>
 				<GridItem>
-					<Spacing as="section" padding="lg">
-						<Text as="h1" size="xl" weight="bold" marginBottom="sm">
-							Kubernetes Pods
-						</Text>
-						<Text as="p" size="md" variant="secondary" marginBottom="md">
-							Demo view using mock data. Unhealthy pods can be deleted from the list.
-						</Text>
-					</Spacing>
+					<Text as="h1" size="xl" weight="bold" marginBottom="xxs">
+						Kubernetes Pods
+					</Text>
+					<Text as="p" size="md" variant="secondary">
+						Pod health across namespaces. Unhealthy pods can be deleted from the list.
+					</Text>
 				</GridItem>
 				<GridItem>
-					<Spacing as="section" padding="md">
+					<Grid columns="auto-fit" minWidth={170} gap="md" isFullWidth>
+						<CalloutValue label="Pods" value={visiblePods.length} icon={PodIcon} size="lg" />
+						<CalloutValue
+							label="Running"
+							value={summary.running}
+							icon={CheckCircledIcon}
+							level={summary.running > 0 ? 'success' : 'default'}
+							size="lg"
+							hasStatusBorder
+						/>
+						<CalloutValue
+							label="Needs attention"
+							value={summary.unhealthy}
+							icon={AttentionCircledIcon}
+							level={summary.unhealthy > 0 ? 'danger' : 'default'}
+							size="lg"
+							hasStatusBorder
+						/>
+						<CalloutValue label="Restarts" value={summary.restarts} icon={RefreshIcon} size="lg" />
+					</Grid>
+				</GridItem>
+				<GridItem>
+					<Grid columns={2} width={280} gap="sm" justifyContent="start" isFullWidth>
+						<InputSearch
+							placeholder="Filter by pod name"
+							size="lg"
+							value={search}
+							onChange={(event) => setSearch(event.target.value)}
+							isFullWidth
+						/>
 						<Select
+							floatingLabel="Namespace"
+							size="lg"
 							options={namespaceOptions}
 							value={namespaceOptions.find((option) => option.value === selectedNamespace) ?? namespaceOptions[0]}
 							onChange={(option) => {
 								const value = Array.isArray(option) ? option[0] : option;
 								setSelectedNamespace(value?.value ?? '');
 							}}
+							isFullWidth
 						/>
-					</Spacing>
+					</Grid>
 				</GridItem>
 				{actionMessage !== '' && (
 					<GridItem>
-						<Text as="p" size="md">
+						<MessageBox level="success" isDismissible onDismiss={() => setActionMessage('')}>
 							{actionMessage}
-						</Text>
+						</MessageBox>
 					</GridItem>
 				)}
 				<GridItem>
-					{visiblePods.length === 0 ? (
-						<Text as="p" size="md">
-							No pods in this namespace.
-						</Text>
-					) : (
-						<Table data={visiblePods} columns={columns} getRowId={(row) => `${row.namespace}/${row.name}`} />
-					)}
+					<Table
+						data={visiblePods}
+						columns={columns}
+						getRowId={(row) => `${row.namespace}/${row.name}`}
+						emptyState={{
+							icon: PodIcon,
+							title: 'No matching pods',
+							subtitle: 'Clear the search or choose a different namespace.',
+						}}
+						stickyHeaders
+						hasInnerBorders
+					/>
 				</GridItem>
 			</Grid>
 		</Spacing>
