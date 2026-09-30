@@ -38,8 +38,7 @@ at runtime and the app renders blank with
 Fix both layers:
 
 1. Force the peer resolution with a scoped override in the **root**
-   `package.json` (the `$react` reference resolves to the root `react`
-   override), then remove and re-add `@datadog/apps-frontend` in the app's
+   `package.json`, then remove and re-add `@datadog/apps-frontend` in the app's
    `package.json` and reinstall — npm keeps an already-recorded nested
    resolution otherwise, so a fresh re-resolution of that subtree is needed:
 
@@ -47,9 +46,14 @@ Fix both layers:
    "overrides": {
      "react": "^18.3.1",
      "react-dom": "^18.3.1",
-     "@datadog/apps-frontend": { "react": "$react", "react-dom": "$react-dom" }
+     "@datadog/apps-frontend": { "react": "^18.3.1", "react-dom": "^18.3.1" }
    }
    ```
+
+   Spell the versions out. A `$react` reference resolves to the root package's
+   own direct dependency named `react`, not to the sibling `react` override;
+   this repo's root has no such dependency, so `$react` fails the whole install
+   with `npm error Unable to resolve reference $react`.
 
    Verify with: the root lockfile must contain no
    `apps/<app>/node_modules/react` entry.
