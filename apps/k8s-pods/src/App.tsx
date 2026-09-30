@@ -1,7 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@datadog/druids/form/Button';
-import { InputText } from '@datadog/druids/form/InputText';
 import { Select } from '@datadog/druids/form/Select';
 import { Grid } from '@datadog/druids/layout/Grid';
 import { GridItem } from '@datadog/druids/layout/GridItem';
@@ -11,9 +9,15 @@ import { Table } from '@datadog/druids/table/Table';
 import type { TableColumn } from '@datadog/druids/table/Table';
 import { Text } from '@datadog/druids/typography/Text';
 
-import { deletePod } from './deletePod.backend';
-import { listPods } from './listPods.backend';
-import type { Pod } from './listPods.backend';
+// Pod describes a single Kubernetes pod shown in the table.
+type Pod = {
+	name: string;
+	namespace: string;
+	status: string;
+	restarts: number;
+	// startedAt is an RFC3339 timestamp of when the pod started.
+	startedAt: string;
+};
 
 // healthyStatuses are pod phases that do not require any action.
 const healthyStatuses = new Set(['running', 'succeeded', 'completed']);
@@ -22,35 +26,31 @@ const healthyStatuses = new Set(['running', 'succeeded', 'completed']);
 // pod is considered unhealthy even if its phase looks fine.
 const unhealthyRestartsThreshold = 5;
 
-const settingsStorageKey = 'k8s-pods-settings';
-
-type Settings = {
-	apiBaseURL: string;
-};
-
-function loadSettings(): Settings {
-	try {
-		const raw = window.localStorage.getItem(settingsStorageKey);
-		if (raw) {
-			const parsed = JSON.parse(raw);
-			return {
-				apiBaseURL: typeof parsed.apiBaseURL === 'string' ? parsed.apiBaseURL : '',
-			};
-		}
-	} catch {
-		// Ignore malformed stored settings.
-	}
-	return { apiBaseURL: '' };
+function minutesAgo(minutes: number): string {
+	return new Date(Date.now() - minutes * 60_000).toISOString();
 }
+
+// mockPods is demo data standing in for a live Kubernetes integration listing.
+const mockPods: Pod[] = [
+	{ name: 'api-gateway-7d9f4c6b5-k2l8p', namespace: 'default', status: 'Running', restarts: 0, startedAt: minutesAgo(60 * 92) },
+	{ name: 'checkout-service-5c8d7f9a1-m4n7q', namespace: 'commerce', status: 'Running', restarts: 1, startedAt: minutesAgo(60 * 41) },
+	{ name: 'checkout-service-5c8d7f9a1-x9r2t', namespace: 'commerce', status: 'CrashLoopBackOff', restarts: 14, startedAt: minutesAgo(23) },
+	{ name: 'payments-worker-6b4c2e1d8-p3v5s', namespace: 'commerce', status: 'Pending', restarts: 0, startedAt: minutesAgo(4) },
+	{ name: 'cart-api-8f2a9d3c7-h6j8k', namespace: 'commerce', status: 'Running', restarts: 2, startedAt: minutesAgo(60 * 168) },
+	{ name: 'postgres-primary-0', namespace: 'database', status: 'Running', restarts: 0, startedAt: minutesAgo(60 * 24 * 12) },
+	{ name: 'redis-cache-7a1b4e9f2-t5y7u', namespace: 'database', status: 'Running', restarts: 3, startedAt: minutesAgo(60 * 55) },
+	{ name: 'log-collector-ds-2f9k8', namespace: 'observability', status: 'Running', restarts: 0, startedAt: minutesAgo(60 * 24 * 6) },
+	{ name: 'metrics-agent-ds-9d3x1', namespace: 'observability', status: 'Error', restarts: 9, startedAt: minutesAgo(48) },
+	{ name: 'grafana-4e7b1c6a2-w2z4n', namespace: 'observability', status: 'Running', restarts: 0, startedAt: minutesAgo(60 * 30) },
+	{ name: 'batch-reports-job-22841', namespace: 'batch', status: 'Succeeded', restarts: 0, startedAt: minutesAgo(35) },
+	{ name: 'batch-etl-worker-22842', namespace: 'batch', status: 'Failed', restarts: 6, startedAt: minutesAgo(12) },
+];
 
 function isUnhealthy(pod: Pod): boolean {
 	return !healthyStatuses.has(pod.status.toLowerCase()) || pod.restarts >= unhealthyRestartsThreshold;
 }
 
 function formatAge(startedAt: string): string {
-	if (startedAt === '') {
-		return '-';
-	}
 	const started = Date.parse(startedAt);
 	if (Number.isNaN(started)) {
 		return '-';
@@ -81,35 +81,10 @@ function statusBadgeLevel(pod: Pod): 'default' | 'warning' | 'danger' {
 }
 
 function App() {
-	const queryClient = useQueryClient();
+	const [pods, setPods] = useState<Pod[]>(mockPods);
 	const [selectedNamespace, setSelectedNamespace] = useState('');
-	const [settings, setSettings] = useState<Settings>(loadSettings);
-	const [showSettings, setShowSettings] = useState(false);
 	const [actionMessage, setActionMessage] = useState('');
 
-	const podsQuery = useQuery({
-		queryKey: ['pods'],
-		queryFn: () => listPods({ limit: 500 }),
-		refetchInterval: 30_000,
-	});
-
-	const deleteMutation = useMutation({
-		mutationFn: (pod: Pod) =>
-			deletePod({
-				namespace: pod.namespace,
-				podName: pod.name,
-				apiBaseURL: settings.apiBaseURL || undefined,
-			}),
-		onSuccess: (_data, pod) => {
-			setActionMessage(`Deleted pod ${pod.namespace}/${pod.name}.`);
-			void queryClient.invalidateQueries({ queryKey: ['pods'] });
-		},
-		onError: (error) => {
-			setActionMessage(`Delete failed: ${error instanceof Error ? error.message : String(error)}`);
-		},
-	});
-
-	const pods = useMemo(() => podsQuery.data?.pods ?? [], [podsQuery.data]);
 	const namespaces = useMemo(() => {
 		const set = new Set<string>();
 		for (const pod of pods) {
@@ -130,6 +105,11 @@ function App() {
 		],
 		[namespaces],
 	);
+
+	const deletePod = (pod: Pod) => {
+		setPods((current) => current.filter((candidate) => candidate.name !== pod.name || candidate.namespace !== pod.namespace));
+		setActionMessage(`Deleted pod ${pod.namespace}/${pod.name}.`);
+	};
 
 	const columns: Array<TableColumn<Pod>> = useMemo(
 		() => [
@@ -158,29 +138,12 @@ function App() {
 					if (!isUnhealthy(pod)) {
 						return null;
 					}
-					return (
-						<Button
-							label="Delete"
-							isPrimary
-							isDisabled={deleteMutation.isPending}
-							onClick={() => deleteMutation.mutate(pod)}
-						/>
-					);
+					return <Button label="Delete" isPrimary onClick={() => deletePod(pod)} />;
 				},
 			},
 		],
-		[deleteMutation],
+		[],
 	);
-
-	const updateSettings = (patch: Partial<Settings>) => {
-		const next = { ...settings, ...patch };
-		setSettings(next);
-		try {
-			window.localStorage.setItem(settingsStorageKey, JSON.stringify(next));
-		} catch {
-			// Storage may be unavailable in the embedded iframe; keep in-memory state.
-		}
-	};
 
 	return (
 		<Spacing as="main" padding="lg">
@@ -191,55 +154,22 @@ function App() {
 							Kubernetes Pods
 						</Text>
 						<Text as="p" size="md" variant="secondary" marginBottom="md">
-							Pods reported by the Kubernetes integration. Unhealthy pods can be deleted through the
-							Kubernetes API server.
+							Demo view using mock data. Unhealthy pods can be deleted from the list.
 						</Text>
 					</Spacing>
 				</GridItem>
 				<GridItem>
 					<Spacing as="section" padding="md">
-						<Grid columns={2} gap="md" isFullWidth>
-							<GridItem>
-								<Select
-									options={namespaceOptions}
-									value={namespaceOptions.find((option) => option.value === selectedNamespace) ?? namespaceOptions[0]}
-									onChange={(option) => {
-										const value = Array.isArray(option) ? option[0] : option;
-										setSelectedNamespace(value?.value ?? '');
-									}}
-								/>
-							</GridItem>
-							<GridItem>
-								<Button label={showSettings ? 'Hide settings' : 'Settings…'} onClick={() => setShowSettings(!showSettings)} />
-							</GridItem>
-						</Grid>
+						<Select
+							options={namespaceOptions}
+							value={namespaceOptions.find((option) => option.value === selectedNamespace) ?? namespaceOptions[0]}
+							onChange={(option) => {
+								const value = Array.isArray(option) ? option[0] : option;
+								setSelectedNamespace(value?.value ?? '');
+							}}
+						/>
 					</Spacing>
 				</GridItem>
-				{showSettings && (
-					<GridItem>
-						<Spacing as="section" padding="md">
-							<Grid columns={2} gap="md" isFullWidth>
-								<GridItem>
-									<Text as="p" size="sm" weight="bold" marginBottom="xs">
-										Kubernetes API server URL (optional override)
-									</Text>
-									<InputText
-										placeholder="https://kubernetes.default.svc"
-										value={settings.apiBaseURL}
-										onChange={(event) => updateSettings({ apiBaseURL: event.target.value })}
-									/>
-								</GridItem>
- 								<GridItem>
-									<Text as="p" size="sm" variant="secondary">
-										Deleting pods requires the <code>kubeAPIConnectionId</code> constant in
-										deletePod.backend.ts to reference an HTTP connection with Kubernetes API
-										credentials.
-									</Text>
-								</GridItem>
-							</Grid>
-						</Spacing>
-					</GridItem>
-				)}
 				{actionMessage !== '' && (
 					<GridItem>
 						<Text as="p" size="md">
@@ -248,25 +178,12 @@ function App() {
 					</GridItem>
 				)}
 				<GridItem>
-					{podsQuery.isLoading ? (
+					{visiblePods.length === 0 ? (
 						<Text as="p" size="md">
-							Loading pods…
-						</Text>
-					) : podsQuery.isError ? (
-						<Text as="p" size="md">
-							Unable to list pods: {String(podsQuery.error)}
-						</Text>
-					) : pods.length === 0 ? (
-						<Text as="p" size="md">
-							No pods found. Make sure the Kubernetes integration is installed and reporting data.
+							No pods in this namespace.
 						</Text>
 					) : (
-						<Table
-							data={visiblePods}
-							columns={columns}
-							getRowId={(row) => `${row.namespace}/${row.name}`}
-							isLoading={deleteMutation.isPending}
-						/>
+						<Table data={visiblePods} columns={columns} getRowId={(row) => `${row.namespace}/${row.name}`} />
 					)}
 				</GridItem>
 			</Grid>
