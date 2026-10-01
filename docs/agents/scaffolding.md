@@ -4,18 +4,28 @@ Pitfalls observed in this workspace when scaffolding a new app with
 `npm init @datadog/apps` (vite-react template) and how to fix them. Apply
 these before the first root install / lockfile gate.
 
-## 1. Generated npm scripts use an unresolvable CLI
+## 1. Keep the generated CLI `upload` script
 
 The generated `package.json` scripts call `npx datadog-apps dev|build|upload`.
-No `datadog-apps` binary is published to the public registry or shipped in this
-workspace, so those scripts fail with an npm 404. Replace them with the direct
-Vite scripts used by the existing apps:
+That binary now ships in `@datadog/apps-cli`, which is a **root devDependency**
+of this workspace — keep the generated `upload` script as-is:
 
 ```json
 "dev": "vite",
 "build": "vite build",
-"upload": "DD_APPS_UPLOAD_ASSETS=1 vite build"
+"upload": "npx datadog-apps upload"
 ```
+
+Direct Vite scripts are fine for `dev` and `build`, but **never for `upload`**.
+`@datadog/vite-plugin` 3.3.0 removed the in-build upload path: a plain
+`vite build` writes `dist/datadog-app-assets.zip` and exits 0 without
+contacting Datadog, so the app silently never goes live while CI stays green.
+Uploading and publishing is the CLI's job now. See
+`docs/agents/build-upload-auth.md`.
+
+(Earlier revisions of this doc said no `datadog-apps` binary was published.
+That was true of the old `@datadog/apps` package, which 404'd; `@datadog/apps-cli`
+superseded it.)
 
 ## 2. React version must match the root overrides
 

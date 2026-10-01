@@ -45,7 +45,8 @@
         "lint:fix": "eslint . --ext ts,tsx --fix"
     },
     "devDependencies": {
-        "@datadog/vite-plugin": "^3.2.1",
+        "@datadog/apps-cli": ">=0.0.2 <0.1.0",
+        "@datadog/vite-plugin": "^3.3.0",
         "@eslint/js": "^9.39.2",
         "@types/node": "^24.12.2",
         "@types/react": "^18.3.0",

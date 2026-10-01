@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "upload": "DD_APPS_UPLOAD_ASSETS=1 vite build",
+    "upload": "npx datadog-apps upload",
     "lint": "eslint . --report-unused-disable-directives --max-warnings 0",
     "lint:fix": "eslint . --fix",
     "preview": "vite preview",
