@@ -168,14 +168,22 @@ jobs:
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
         run: |
           if [ -z "$DD_API_KEY" ] || [ -z "$DD_APP_KEY" ]; then
-            echo "::error::DATADOG_API_KEY / DATADOG_APP_KEY are not set on this repository, so the upload can't authenticate. Without them it falls back to an interactive OAuth login, which hangs for 5 minutes on a CI runner before failing."
+            echo "::error::DATADOG_API_KEY / DATADOG_APP_KEY are not set on this repository, so the upload can't authenticate. Without them the datadog-apps CLI has no non-interactive credentials and exits with an error."
             echo "::error::Set them under Settings > Secrets and variables > Actions, or run: npm init @datadog/apps --set-secrets"
             exit 1
           fi
       - name: Upload ${{ matrix.app }}
+        working-directory: apps/${{ matrix.app }}
         env:
-          APP: ${{ matrix.app }}
           DD_API_KEY: ${{ secrets.DATADOG_API_KEY }}
           DD_SITE: datad0g.com
           DD_APP_KEY: ${{ secrets.DATADOG_APP_KEY }}
-        run: npm run upload -w "apps/$APP"
+        run: |
+          set -euo pipefail
+          "$GITHUB_WORKSPACE/node_modules/.bin/datadog-apps" upload \
+            --version-name "$GITHUB_SHA" \
+            | tee "$RUNNER_TEMP/upload.log"
+          if ! grep -q "Published version" "$RUNNER_TEMP/upload.log"; then
+            echo "::error::The upload exited 0 but never published a version. Treating this as a failed deploy: the app is NOT live. Check that the upload path still exists in the installed @datadog/apps-cli."
+            exit 1
+          fi

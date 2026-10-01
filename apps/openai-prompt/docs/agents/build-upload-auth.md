@@ -7,9 +7,12 @@ This scaffold uses npm. Prefer the scripts in `package.json` over ad hoc command
 - `npm run dev` — start the local Vite dev server.
 - `npm run typecheck` — TypeScript check without emitting files. Use this for credential-free validation.
 - `npm run lint` / `npm run lint:fix` — run ESLint.
-- `npm run build` — production build (does not deploy by default).
-- `npm run deploy` — build, upload, and publish the app live.
-- `npm run publish` — publish the most recently uploaded version without rebuilding.
+- `npm run build` — local production build. Writes `dist/datadog-app-assets.zip` and uploads nothing.
+- `npm run upload` — build, upload, and publish the app live, via the `datadog-apps` CLI
+  (`@datadog/apps-cli`, a root devDependency). This is the only script that makes an app go live.
+
+There are no `deploy` or `publish` scripts in this workspace. Uploading and publishing are a
+single `upload` step: the CLI uploads the bundle, then releases that version to live.
 
 ## App identity (do not change)
 
@@ -133,12 +136,17 @@ The application key needs both scopes enabled — not just one:
 
 Go to `https://app.datadoghq.com/organization-settings/application-keys`, confirm both scopes, or create a new key with both.
 
-**Build succeeds but nothing deploys**
+**Build succeeds but nothing goes live**
 
-- Use `npm run deploy`, not `npm run build`, when the intent is to deploy.
-- Check whether `DD_APPS_PUBLISH` is set to `false` in the environment — the app uploads as a draft but does not go live. Unset the variable or run `npm run publish` separately.
-- Confirm `dryRun` in `vite.config.ts` is not `true`.
-- Confirm `DD_APPS_UPLOAD_ASSETS` is set — `npm run deploy` does this automatically.
+- Use `npm run upload`, not `npm run build`. `build` only writes the zip.
+- Check that the `upload` script runs `npx datadog-apps upload` and not a bare `vite build`.
+  `@datadog/vite-plugin` 3.3.0 dropped the in-build upload path, so a `vite build`
+  spelled as "upload" exits 0 having published nothing. This exact regression took
+  `scott-mountains` live-less while CI reported success (PR #14).
+- A successful upload prints `Published version <id> live.` followed by the app's URL.
+  If that line is absent, nothing was published, whatever the exit code says.
+- `DD_APPS_UPLOAD_ASSETS` is not read by any version of the plugin or the CLI. If you
+  see it in a script, that script is stale.
 
 **Build fails with missing credentials**
 
