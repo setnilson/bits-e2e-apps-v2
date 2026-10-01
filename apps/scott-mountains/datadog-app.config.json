@@ -1,0 +1,6 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "id": "3c79b16691f56b1e6fb8549c4ec7323e",
+  "name": "scott-mountains"
+}
