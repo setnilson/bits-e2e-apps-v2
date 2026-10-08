@@ -1,0 +1,7 @@
+{
+  "$schema": "https://unpkg.com/@datadog/create-apps/dist/datadog-app.config.schema.json",
+  "datadogSite": "datad0g.com",
+  "id": "a4fb6afa-195c-48ce-9dde-5229f6ff759f",
+  "name": "Dolphin Cove",
+  "tags": []
+}
